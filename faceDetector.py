@@ -5,7 +5,18 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.models import load_model
+import findspark
 
+os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-arm64"
+os.environ["SPARK_HOME"] = "/home/devpham/Desktop/NCKH2/NCKH_PySpark/spark-3.1.1-bin-hadoop3.2"
+findspark.init()
+
+import pyspark as spark
+from pyspark.sql import SparkSession
+from pyspark.sql.types import *
+from pyspark.ml.linalg import Vectors, VectorUDT
+from pyspark.ml.feature import BucketedRandomProjectionLSHModel
+print("version pyspark: ",spark.__version__)
 
 class FaceDetector:
     def __init__(self, face_cascade_path):
@@ -56,25 +67,83 @@ class ExtractFeature:
 
         print(f"Saved vector for {filename} in {vector_file}")
 
-# Sử dụng class FaceDetector
-if __name__ == "__main__":
-    face_cascade_path = './haarcascade_frontalface_default.xml'
-    image_path = './img.jpeg'
-    face_detector = FaceDetector(face_cascade_path)
-    ime_cut = face_detector.detect_faces(image_path)
-    cv2.imwrite("image.jpg",ime_cut)
-    
-    model_path = './model.h5'
+def read_npy_files_from_parent_dir(parent_dir):
+    schema = StructType([
+        StructField("id", StringType(), nullable=False),
+        StructField("features", VectorUDT(), nullable=False)
+    ])
 
-    feature = ExtractFeature(model_path)
+    def process_file(file, idx):
+        file_name = os.path.basename(file)
+        vector = np.load(file)
+        vector = Vectors.dense(*vector.tolist())  # Chuyển đổi sang Vector của PySpark
+        return (file_name, vector)
 
-    input_image = 'image.jpg'
+    all_files = []
+    for root, dirs, files in os.walk(parent_dir):
+        for idx, file in enumerate(files):
+            if file.endswith(".npy"):
+                file_path = os.path.join(root, file)
+                all_files.append((file_path, idx))
 
-    output_folder = './features'
+    rdd = spark.sparkContext.parallelize(all_files)
+    df = rdd.map(lambda x: process_file(x[0], x[1])).toDF(schema)
+    return df
 
-    os.makedirs(output_folder, exist_ok=True)
 
-    feature.vectorize_and_save(input_image, output_folder)
+# # Sử dụng class FaceDetector
+# if __name__ == "__main__":
 
-    print("Conversion complete.")
+face_cascade_path = './haarcascade_frontalface_default.xml'
+image_path = './img.jpeg'
+face_detector = FaceDetector(face_cascade_path)
+ime_cut = face_detector.detect_faces(image_path)
+cv2.imwrite("image.jpg",ime_cut)
 
+model_path = './model.h5'
+
+feature = ExtractFeature(model_path)
+
+input_image = 'image.jpg'
+
+output_folder = './features'
+
+os.makedirs(output_folder, exist_ok=True)
+
+feature.vectorize_and_save(input_image, output_folder)
+
+print("Conversion complete.")
+
+# Khởi tạo SparkSession
+spark = SparkSession.builder \
+    .appName("Load LSH Model") \
+    .getOrCreate()
+
+# Đường dẫn tới thư mục chứa mô hình đã lưu
+model_path = "./model_lsh"
+directory = "./vectorEmbeddingToTrainLSH"
+df = read_npy_files_from_parent_dir(directory)
+
+# Tải mô hình đã lưu
+loaded_model = BucketedRandomProjectionLSHModel.load(model_path)
+
+# Hiển thị thông tin của mô hình
+print("Model Parameters:")
+print("InputCol:", loaded_model.getInputCol())
+print("OutputCol:", loaded_model.getOutputCol())
+print("NumHashTables:", loaded_model.getNumHashTables())
+
+# Tạo DataFrame chứa vector test
+# Trích xuất đặc trưng từ ảnh
+img_features = feature.intermediate_layer_model.predict(feature.load_and_preprocess_image(input_image))
+# Chuyển đổi đặc trưng thành Vector
+img_vector = Vectors.dense(img_features.flatten())
+print("Image Vector:")
+print(img_vector.shape)
+
+# Tìm dữ liệu gần nhất với vector test bằng mô hình đã tải
+nearest_df = loaded_model.approxNearestNeighbors(df, img_vector, 1)
+nearest_df.show()
+
+# Dừng SparkSession
+spark.stop()

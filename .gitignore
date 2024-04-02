@@ -3,5 +3,7 @@ app_nckh_2024/
 .app_nckh_2024/
 
 /venv/
+/venv_linux/
 /features/
+/spark*/
 
