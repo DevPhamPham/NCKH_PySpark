@@ -8,7 +8,7 @@ from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.models import load_model
 import findspark
 
-os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64"
+os.environ["JAVA_HOME"] = "java-8-openjdk-arm64"
 os.environ["SPARK_HOME"] = "spark-3.1.1-bin-hadoop3.2"
 findspark.init()
 
