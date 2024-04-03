@@ -3,3 +3,4 @@ numpy
 tensorflow==2.15
 findspark==2.0.1
 opencv-python
+Pillow
