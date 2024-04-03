@@ -16,7 +16,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import *
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.feature import BucketedRandomProjectionLSHModel
-print("version pyspark: ",spark.__version__)
+# print("version pyspark: ",spark.__version__)
 
 class FaceDetector:
     def __init__(self, face_cascade_path):
@@ -26,16 +26,9 @@ class FaceDetector:
         img = cv2.imread(image_path)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
-
-        # cropped_faces = []
         for (x, y, w, h) in faces:
             cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
             cropped_face = img[y:y+h, x:x+w]
-            # cropped_faces.append(cropped_face)
-
-        # cv2.imshow('face',np.array(cropped_face))
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
 
         return cropped_face
 
@@ -65,7 +58,7 @@ class ExtractFeature:
         vector_file = os.path.join(output_folder, filename + '.npy')
         np.save(vector_file, vector)
 
-        print(f"Saved vector for {filename} in {vector_file}")
+        # print(f"Saved vector for {filename} in {vector_file}")
 
 def read_npy_files_from_parent_dir(parent_dir):
     schema = StructType([
@@ -90,60 +83,60 @@ def read_npy_files_from_parent_dir(parent_dir):
     df = rdd.map(lambda x: process_file(x[0], x[1])).toDF(schema)
     return df
 
+# def getResult(image_path):
+#     face_cascade_path = './haarcascade_frontalface_default.xml'
+#     # image_path = './img.jpeg'
+#     face_detector = FaceDetector(face_cascade_path)
+#     ime_cut = face_detector.detect_faces(image_path)
+#     cv2.imwrite("image.jpg",ime_cut)
 
-# # Sử dụng class FaceDetector
-# if __name__ == "__main__":
+#     model_path = './model.h5'
 
-face_cascade_path = './haarcascade_frontalface_default.xml'
-image_path = './img.jpeg'
-face_detector = FaceDetector(face_cascade_path)
-ime_cut = face_detector.detect_faces(image_path)
-cv2.imwrite("image.jpg",ime_cut)
+#     feature = ExtractFeature(model_path)
 
-model_path = './model.h5'
+#     input_image = 'image.jpg'
 
-feature = ExtractFeature(model_path)
+#     output_folder = './features'
 
-input_image = 'image.jpg'
+#     os.makedirs(output_folder, exist_ok=True)
 
-output_folder = './features'
+#     feature.vectorize_and_save(input_image, output_folder)
 
-os.makedirs(output_folder, exist_ok=True)
+#     # print("Conversion complete.")
 
-feature.vectorize_and_save(input_image, output_folder)
+#     # Khởi tạo SparkSession
+#     spark = SparkSession.builder \
+#         .appName("Load LSH Model") \
+#         .getOrCreate()
 
-print("Conversion complete.")
+#     # Đường dẫn tới thư mục chứa mô hình đã lưu
+#     model_path = "./model_lsh"
+#     directory = "./vectorEmbeddingToTrainLSH"
+#     df = read_npy_files_from_parent_dir(directory)
 
-# Khởi tạo SparkSession
-spark = SparkSession.builder \
-    .appName("Load LSH Model") \
-    .getOrCreate()
+#     # Tải mô hình đã lưu
+#     loaded_model = BucketedRandomProjectionLSHModel.load(model_path)
 
-# Đường dẫn tới thư mục chứa mô hình đã lưu
-model_path = "./model_lsh"
-directory = "./vectorEmbeddingToTrainLSH"
-df = read_npy_files_from_parent_dir(directory)
+#     # Hiển thị thông tin của mô hình
+#     # print("Model Parameters:")
+#     # print("InputCol:", loaded_model.getInputCol())
+#     # print("OutputCol:", loaded_model.getOutputCol())
+#     # print("NumHashTables:", loaded_model.getNumHashTables())
 
-# Tải mô hình đã lưu
-loaded_model = BucketedRandomProjectionLSHModel.load(model_path)
+#     # Tạo DataFrame chứa vector test
+#     # Trích xuất đặc trưng từ ảnh
+#     img_features = feature.intermediate_layer_model.predict(feature.load_and_preprocess_image(input_image))
+#     # Chuyển đổi đặc trưng thành Vector
+#     img_vector = Vectors.dense(img_features.flatten())
+#     # print("Image Vector:")
+#     # print(img_vector.shape)
 
-# Hiển thị thông tin của mô hình
-print("Model Parameters:")
-print("InputCol:", loaded_model.getInputCol())
-print("OutputCol:", loaded_model.getOutputCol())
-print("NumHashTables:", loaded_model.getNumHashTables())
+#     # Tìm dữ liệu gần nhất với vector test bằng mô hình đã tải
+#     nearest_df = loaded_model.approxNearestNeighbors(df, img_vector, 5)
+#     nearest_df.show()
 
-# Tạo DataFrame chứa vector test
-# Trích xuất đặc trưng từ ảnh
-img_features = feature.intermediate_layer_model.predict(feature.load_and_preprocess_image(input_image))
-# Chuyển đổi đặc trưng thành Vector
-img_vector = Vectors.dense(img_features.flatten())
-print("Image Vector:")
-print(img_vector.shape)
-
-# Tìm dữ liệu gần nhất với vector test bằng mô hình đã tải
-nearest_df = loaded_model.approxNearestNeighbors(df, img_vector, 1)
-nearest_df.show()
-
-# Dừng SparkSession
-spark.stop()
+#     # Dừng SparkSession
+#     spark.stop()
+    
+#     return nearest_df.select("id").collect()
+    
